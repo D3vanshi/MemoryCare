@@ -17,6 +17,7 @@ import { useForm } from "react-hook-form";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { ChevronLeft, Plus, Search, Filter } from "lucide-react";
 import { Photo } from "@shared/schema";
+import { z } from "zod";
 
 export default function GalleryPage() {
   const [, setLocation] = useLocation();
@@ -34,6 +35,15 @@ export default function GalleryPage() {
     queryKey: ["/api/photos/categories"]
   });
 
+  // Photo form validation schema
+  const formSchema = z.object({
+    title: z.string().min(1, { message: "Title is required" }),
+    description: z.string().optional(),
+    imageUrl: z.string().min(1, { message: "Please upload an image" }),
+    category: z.string().min(1, { message: "Please select a category" }),
+    date: z.string().min(1, { message: "Date is required" })
+  });
+
   const form = useForm({
     defaultValues: {
       title: "",
@@ -42,6 +52,7 @@ export default function GalleryPage() {
       category: "memories",
       date: new Date().toISOString().split("T")[0]
     },
+    resolver: zodResolver(formSchema)
   });
 
   const addPhotoMutation = useMutation({
@@ -55,12 +66,23 @@ export default function GalleryPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/photos"] });
       queryClient.invalidateQueries({ queryKey: ["/api/photos/categories"] });
+      // Reset form values explicitly first
+      form.reset({
+        title: "",
+        description: "",
+        imageUrl: "",
+        category: "memories",
+        date: new Date().toISOString().split("T")[0]
+      });
+      // Then close the dialog
       setIsAddPhotoOpen(false);
-      form.reset();
+      // Finally show success toast
       toast({
         title: "Photo added",
         description: "Your photo has been added to the gallery.",
       });
+      // Force a refetch to update the UI
+      refetch();
     },
     onError: (error) => {
       toast({
@@ -158,19 +180,19 @@ export default function GalleryPage() {
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
           </div>
         ) : filteredPhotos && filteredPhotos.length > 0 ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 pb-12">
             {filteredPhotos.map((photo) => (
               <div 
                 key={photo.id} 
-                className="relative group overflow-hidden rounded-lg shadow-md aspect-square"
+                className="relative group overflow-hidden rounded-lg shadow-md hover:shadow-lg transition-shadow aspect-square"
               >
                 <img 
                   src={photo.imageUrl} 
                   alt={photo.title} 
                   className="w-full h-full object-cover"
                 />
-                <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-40 transition-opacity flex items-end justify-start p-3">
-                  <div className="transform translate-y-full group-hover:translate-y-0 transition-transform">
+                <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-60 transition-opacity flex items-end justify-start p-4">
+                  <div className="transform translate-y-full group-hover:translate-y-0 transition-transform duration-200">
                     <p className="text-white text-sm font-medium">{photo.title}</p>
                     <p className="text-white text-xs opacity-80">
                       {new Date(photo.date).toLocaleDateString('en-US', {
@@ -179,6 +201,11 @@ export default function GalleryPage() {
                         day: 'numeric'
                       })}
                     </p>
+                    {photo.description && (
+                      <p className="text-white text-xs mt-1 opacity-90 line-clamp-2">
+                        {photo.description}
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -218,7 +245,7 @@ export default function GalleryPage() {
 
         {/* Add Photo Dialog */}
         <Dialog open={isAddPhotoOpen} onOpenChange={setIsAddPhotoOpen}>
-          <DialogContent>
+          <DialogContent className="max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Add New Photo</DialogTitle>
               <DialogDescription>
