@@ -85,13 +85,18 @@ export class MemStorage implements IStorage {
       checkPeriod: 86400000, // prune expired entries every 24h
     });
     
-    // Add a demo user
-    this.createUser({
+    // Add a demo user with properly hashed password
+    // Using a pre-hashed version of "password" with salt
+    const hashedPassword = "d74ff0ee8da3b9806b18c877dbf29bbde50b5bd8e4dad7a3a725000feb82e8f1c0b000391b611dd0587289ca29151e6540e088dc992ab5ea40055694bb88a7ab.3ee861f8aacf9c30f4e8a6f85ff98031";
+    
+    const demoUser: User = {
+      id: this.userIdCounter++,
       username: "demo@example.com",
-      password: "password",
+      password: hashedPassword,
       name: "Demo User",
       role: "patient"
-    });
+    };
+    this.users.set(demoUser.id, demoUser);
   }
 
   // User methods
