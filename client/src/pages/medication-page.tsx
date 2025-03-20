@@ -182,24 +182,28 @@ export default function MedicationPage() {
                 {medications.map((medication, index) => (
                   <li key={medication.id} className="p-4 hover:bg-gray-50">
                     <div className="flex items-start justify-between">
-                      <div className="flex items-start space-x-3">
-                        <div className={`flex-shrink-0 p-2 bg-${getIconColor(index)}-100 rounded-full`}>
-                          <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 text-${getIconColor(index)}-600`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <div className="flex items-start space-x-3 w-full">
+                        <div className={`flex-shrink-0 p-3 bg-${getIconColor(index)}-100 rounded-full`}>
+                          <svg xmlns="http://www.w3.org/2000/svg" className={`h-6 w-6 text-${getIconColor(index)}-600`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                             <path d="m6 2 12 4-12 4 12 4-12 4 12 4-6-2"></path>
                           </svg>
                         </div>
-                        <div>
-                          <h3 className="font-medium text-gray-800">{medication.name}</h3>
-                          <div className="mt-1 flex items-center text-sm text-gray-500">
-                            <Clock className="h-4 w-4 mr-1" />
-                            <span>{medication.time}</span>
+                        <div className="w-full">
+                          <div className="flex justify-between items-start w-full">
+                            <h3 className="font-medium text-gray-800 text-lg">{medication.name}</h3>
+                            <div className={`px-3 py-1 rounded-full bg-${getIconColor(index)}-100 text-${getIconColor(index)}-700 text-xs font-medium`}>
+                              {formatFrequency(medication.frequency)}
+                            </div>
                           </div>
-                          <div className="mt-1 flex items-center text-sm text-gray-500">
-                            <Calendar className="h-4 w-4 mr-1" />
-                            <span>{formatFrequency(medication.frequency)}</span>
+                          <div className="mt-2 flex items-center text-sm text-gray-500 bg-gray-50 p-2 rounded-md">
+                            <Clock className="h-5 w-5 mr-2 text-primary-500" />
+                            <span className="font-medium text-base">{medication.time}</span>
+                            <div className="ml-auto flex items-center">
+                              <span className="text-xs bg-gray-200 rounded-full px-2 py-1">Reminder set</span>
+                            </div>
                           </div>
                           {medication.notes && (
-                            <div className="mt-1 text-sm text-gray-500 italic">
+                            <div className="mt-2 text-sm text-gray-600 p-2 border-l-2 border-gray-200 pl-3">
                               {medication.notes}
                             </div>
                           )}

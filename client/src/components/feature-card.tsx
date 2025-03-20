@@ -74,24 +74,22 @@ export function FeatureCard({ name, icon, color, path }: FeatureCardProps) {
   };
 
   return (
-    <Link href={path}>
-      <a className="feature-card bg-white rounded-xl shadow-md p-4 flex flex-col items-center hover:shadow-lg transition-shadow cursor-pointer">
-        <div className={`w-14 h-14 rounded-full ${getColorClass(color)} flex items-center justify-center mb-3`}>
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            className="h-6 w-6"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            {getIconPath(icon)}
-          </svg>
-        </div>
-        <h3 className="font-medium text-center">{name}</h3>
-      </a>
+    <Link href={path} className="feature-card bg-white rounded-xl shadow-md p-4 flex flex-col items-center hover:shadow-lg transition-shadow cursor-pointer">
+      <div className={`w-14 h-14 rounded-full ${getColorClass(color)} flex items-center justify-center mb-3`}>
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          className="h-6 w-6"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          {getIconPath(icon)}
+        </svg>
+      </div>
+      <h3 className="font-medium text-center">{name}</h3>
     </Link>
   );
 }

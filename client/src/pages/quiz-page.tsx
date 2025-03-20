@@ -15,7 +15,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { ChevronLeft, ChevronRight, Clock, Check, Brain, User, ArrowRight, PlusCircle } from "lucide-react";
+import { ChevronLeft, ChevronRight, Clock, Check, Brain, User, ArrowRight, PlusCircle, Plus } from "lucide-react";
 import { Quiz, QuizResult } from "@shared/schema";
 import { z } from "zod";
 

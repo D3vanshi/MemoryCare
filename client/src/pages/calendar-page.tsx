@@ -102,14 +102,48 @@ export default function CalendarPage() {
 
   const renderCalendarDay = (day: Date) => {
     const event = getEventForDate(day);
+    const isToday = new Date().toDateString() === day.toDateString();
+    const isCurrentMonth = day.getMonth() === date.getMonth();
+    
     return (
-      <div className="relative h-full min-h-[80px] p-1">
-        <time className={`text-sm ${day.getMonth() !== date.getMonth() ? 'text-gray-400' : ''}`}>
-          {day.getDate()}
-        </time>
+      <div className={`relative h-full min-h-[100px] p-2 ${isCurrentMonth ? '' : 'opacity-40'} ${isToday ? 'bg-primary-50' : ''} hover:bg-gray-50 transition-colors`}>
+        <div className="flex justify-between items-center mb-1">
+          <time className={`font-medium ${isToday ? 'text-primary-600 bg-primary-100 rounded-full w-7 h-7 flex items-center justify-center' : ''} ${isCurrentMonth ? 'text-gray-700' : 'text-gray-400'}`}>
+            {day.getDate()}
+          </time>
+          {isCurrentMonth && !event && (
+            <button 
+              onClick={() => {
+                setNewEvent({
+                  ...newEvent,
+                  date: day.toISOString().split("T")[0]
+                });
+                setIsAddEventOpen(true);
+              }}
+              className="text-gray-400 hover:text-primary-500 cursor-pointer"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+              </svg>
+            </button>
+          )}
+        </div>
+        
         {event && (
-          <div className={`mt-1 p-1 text-xs rounded bg-${event.color || 'blue'}-100 text-${event.color || 'blue'}-800 truncate`}>
-            {event.title}
+          <div 
+            className={`mt-1 p-2 rounded-md bg-${event.color || 'blue'}-100 text-${event.color || 'blue'}-800 text-xs border-l-2 border-${event.color || 'blue'}-500 shadow-sm cursor-pointer hover:bg-${event.color || 'blue'}-200`}
+            onClick={() => {
+              toast({
+                title: event.title,
+                description: `Date: ${new Date(event.date).toLocaleDateString()}${event.type ? ` • Type: ${event.type}` : ''}`,
+              });
+            }}
+          >
+            <div className="font-medium truncate">{event.title}</div>
+            {event.type && (
+              <div className="mt-1 text-xs opacity-80">{event.type}</div>
+            )}
           </div>
         )}
       </div>
