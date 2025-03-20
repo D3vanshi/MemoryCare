@@ -331,7 +331,7 @@ export default function QuizPage() {
 
             {/* Create Quiz Dialog */}
             <Dialog open={isAddQuizOpen} onOpenChange={setIsAddQuizOpen}>
-              <DialogContent className="max-w-3xl">
+              <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>Create New Quiz</DialogTitle>
                   <DialogDescription>

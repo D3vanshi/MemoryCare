@@ -26,7 +26,7 @@ export default function GalleryPage() {
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
   
-  const { data: photos, isLoading } = useQuery<Photo[]>({
+  const { data: photos, isLoading, refetch } = useQuery<Photo[]>({
     queryKey: ["/api/photos"]
   });
 

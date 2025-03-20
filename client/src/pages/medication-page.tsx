@@ -26,7 +26,7 @@ export default function MedicationPage() {
   const [medicationToEdit, setMedicationToEdit] = useState<Medication | null>(null);
   const [medicationToDelete, setMedicationToDelete] = useState<Medication | null>(null);
   
-  const { data: medications, isLoading } = useQuery<Medication[]>({
+  const { data: medications, isLoading, refetch } = useQuery<Medication[]>({
     queryKey: ["/api/medications"]
   });
 
@@ -50,12 +50,22 @@ export default function MedicationPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/medications"] });
+      // Reset form values explicitly first
+      addMedicationForm.reset({
+        name: "",
+        time: "",
+        frequency: "daily",
+        notes: ""
+      });
+      // Then close the dialog
       setIsAddMedicationOpen(false);
-      addMedicationForm.reset();
+      // Finally show success toast
       toast({
         title: "Medication added",
         description: "Your medication reminder has been added.",
       });
+      // Force a refetch to update the UI
+      refetch();
     },
     onError: (error) => {
       toast({
@@ -76,12 +86,24 @@ export default function MedicationPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/medications"] });
+      // Reset form values explicitly first
+      addMedicationForm.reset({
+        name: "",
+        time: "",
+        frequency: "daily",
+        notes: ""
+      });
+      // Then clear the medication being edited
       setMedicationToEdit(null);
-      addMedicationForm.reset();
+      // Then close the dialog
+      setIsAddMedicationOpen(false);
+      // Finally show success toast
       toast({
         title: "Medication updated",
         description: "Your medication reminder has been updated.",
       });
+      // Force a refetch to update the UI
+      refetch();
     },
     onError: (error) => {
       toast({
@@ -103,6 +125,8 @@ export default function MedicationPage() {
         title: "Medication deleted",
         description: "Your medication reminder has been deleted.",
       });
+      // Force a refetch to update the UI
+      refetch();
     },
     onError: (error) => {
       toast({
