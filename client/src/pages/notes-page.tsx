@@ -25,7 +25,7 @@ export default function NotesPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   
-  const { data: notes, isLoading } = useQuery<Note[]>({
+  const { data: notes, isLoading, refetch } = useQuery<Note[]>({
     queryKey: ["/api/notes"]
   });
 
@@ -63,12 +63,21 @@ export default function NotesPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/notes"] });
+      // Reset form values explicitly first
+      form.reset({
+        title: "",
+        content: "",
+        tags: [] as string[],
+      });
+      // Then close the dialog
       setIsAddNoteOpen(false);
-      form.reset();
+      // Finally show success toast
       toast({
         title: "Note added",
         description: "Your note has been saved.",
       });
+      // Force a refetch to update the UI
+      refetch();
     },
     onError: (error) => {
       toast({
