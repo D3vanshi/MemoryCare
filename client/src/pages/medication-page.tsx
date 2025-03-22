@@ -275,8 +275,9 @@ export default function MedicationPage() {
               });
               setIsAddMedicationOpen(true);
             }}
+            type="button"
             variant="default"
-            className="flex items-center gap-2"
+            className="flex items-center gap-2 relative z-10"
           >
             <Plus className="h-5 w-5" />
             Add Medication

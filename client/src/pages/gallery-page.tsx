@@ -166,8 +166,9 @@ export default function GalleryPage() {
 
             <Button 
               onClick={() => setIsAddPhotoOpen(true)}
+              type="button"
               variant="default"
-              className="flex items-center gap-2"
+              className="flex items-center gap-2 relative z-10"
             >
               <Plus className="h-5 w-5" />
               Add Photo
@@ -235,7 +236,11 @@ export default function GalleryPage() {
                 <>
                   <h3 className="text-lg font-medium text-gray-900 mb-1">No photos yet</h3>
                   <p className="text-gray-500 mb-4">Start building your memory collection</p>
-                  <Button onClick={() => setIsAddPhotoOpen(true)}>
+                  <Button 
+                    onClick={() => setIsAddPhotoOpen(true)} 
+                    type="button" 
+                    className="relative z-10"
+                  >
                     Add your first photo
                   </Button>
                 </>
