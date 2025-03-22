@@ -275,9 +275,10 @@ export default function MedicationPage() {
               });
               setIsAddMedicationOpen(true);
             }}
-            className="flex items-center px-4 py-2 bg-primary-500 text-white rounded-lg shadow-sm hover:bg-primary-600"
+            variant="default"
+            className="flex items-center gap-2"
           >
-            <Plus className="mr-2 h-5 w-5" />
+            <Plus className="h-5 w-5" />
             Add Medication
           </Button>
         </div>

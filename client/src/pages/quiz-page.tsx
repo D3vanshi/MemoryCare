@@ -255,7 +255,7 @@ export default function QuizPage() {
               <ChevronLeft className="h-6 w-6" />
             </Button>
             <h1 className="text-2xl font-bold text-gray-800">Memory Quiz</h1>
-            {user && user.role === "caretaker" && (
+            {user && (user.role === "caretaker" || user.role === "student") && (
               <Button 
                 variant="outline"
                 size="sm"
