@@ -175,7 +175,15 @@ export default function NotesPage() {
           <div className="mb-4 flex items-center">
             <span className="mr-2 text-sm text-gray-500">Filtered by:</span>
             <span 
-              className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-${noteColors[selectedTag] || 'gray'}-100 text-${noteColors[selectedTag] || 'gray'}-800`}
+              className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${selectedTag === 'health' ? 'bg-yellow-100 text-yellow-800' : 
+                          selectedTag === 'social' ? 'bg-green-100 text-green-800' : 
+                          selectedTag === 'family' ? 'bg-blue-100 text-blue-800' : 
+                          selectedTag === 'important' ? 'bg-red-100 text-red-800' : 
+                          selectedTag === 'hobby' ? 'bg-purple-100 text-purple-800' : 
+                          selectedTag === 'shopping' ? 'bg-gray-100 text-gray-800' : 
+                          selectedTag === 'fun' ? 'bg-purple-100 text-purple-800' : 
+                          selectedTag === 'personal' ? 'bg-pink-100 text-pink-800' : 
+                          'bg-gray-100 text-gray-800'}`}
             >
               {selectedTag}
               <button 
@@ -202,7 +210,16 @@ export default function NotesPage() {
               return (
                 <div 
                   key={note.id} 
-                  className={`bg-white p-4 rounded-xl shadow-md hover:shadow-lg transition-shadow border-l-4 border-${borderColor}-400`}
+                  className={`bg-white p-4 rounded-xl shadow-md hover:shadow-lg transition-shadow border-l-4 
+                  ${borderColor === 'health' ? 'border-yellow-400' : 
+                    borderColor === 'social' ? 'border-green-400' : 
+                    borderColor === 'family' ? 'border-blue-400' : 
+                    borderColor === 'important' ? 'border-red-400' : 
+                    borderColor === 'hobby' ? 'border-purple-400' : 
+                    borderColor === 'shopping' ? 'border-gray-400' : 
+                    borderColor === 'fun' ? 'border-purple-400' : 
+                    borderColor === 'personal' ? 'border-pink-400' : 
+                    'border-gray-400'}`}
                 >
                   <div className="flex items-start justify-between mb-2">
                     <h3 className="font-medium text-gray-800">{note.title}</h3>
@@ -214,7 +231,16 @@ export default function NotesPage() {
                       {tags.map((tag) => (
                         <span 
                           key={tag}
-                          className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-${noteColors[tag] || 'gray'}-100 text-${noteColors[tag] || 'gray'}-800 cursor-pointer`}
+                          className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium cursor-pointer
+                          ${tag === 'health' ? 'bg-yellow-100 text-yellow-800' : 
+                            tag === 'social' ? 'bg-green-100 text-green-800' : 
+                            tag === 'family' ? 'bg-blue-100 text-blue-800' : 
+                            tag === 'important' ? 'bg-red-100 text-red-800' : 
+                            tag === 'hobby' ? 'bg-purple-100 text-purple-800' : 
+                            tag === 'shopping' ? 'bg-gray-100 text-gray-800' : 
+                            tag === 'fun' ? 'bg-purple-100 text-purple-800' : 
+                            tag === 'personal' ? 'bg-pink-100 text-pink-800' : 
+                            'bg-gray-100 text-gray-800'}`}
                           onClick={() => setSelectedTag(tag)}
                         >
                           {tag}
