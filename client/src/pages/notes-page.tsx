@@ -343,7 +343,16 @@ export default function NotesPage() {
                         {field.value.map(tag => (
                           <span 
                             key={tag} 
-                            className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-${noteColors[tag] || 'gray'}-100 text-${noteColors[tag] || 'gray'}-800`}
+                            className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium 
+                            ${tag === 'health' ? 'bg-yellow-100 text-yellow-800' : 
+                              tag === 'social' ? 'bg-green-100 text-green-800' : 
+                              tag === 'family' ? 'bg-blue-100 text-blue-800' : 
+                              tag === 'important' ? 'bg-red-100 text-red-800' : 
+                              tag === 'hobby' ? 'bg-purple-100 text-purple-800' : 
+                              tag === 'shopping' ? 'bg-gray-100 text-gray-800' : 
+                              tag === 'fun' ? 'bg-purple-100 text-purple-800' : 
+                              tag === 'personal' ? 'bg-pink-100 text-pink-800' : 
+                              'bg-gray-100 text-gray-800'}`}
                           >
                             {tag}
                             <button 
@@ -364,7 +373,16 @@ export default function NotesPage() {
                               key={tag}
                               type="button"
                               onClick={() => addTag(tag)}
-                              className={`px-2 py-1 border border-${noteColors[tag] || 'gray'}-200 rounded-full text-xs text-${noteColors[tag] || 'gray'}-600 hover:bg-${noteColors[tag] || 'gray'}-50`}
+                              className={`px-2 py-1 border rounded-full text-xs 
+                              ${tag === 'health' ? 'border-yellow-200 text-yellow-600 hover:bg-yellow-50' : 
+                                tag === 'social' ? 'border-green-200 text-green-600 hover:bg-green-50' : 
+                                tag === 'family' ? 'border-blue-200 text-blue-600 hover:bg-blue-50' : 
+                                tag === 'important' ? 'border-red-200 text-red-600 hover:bg-red-50' : 
+                                tag === 'hobby' ? 'border-purple-200 text-purple-600 hover:bg-purple-50' : 
+                                tag === 'shopping' ? 'border-gray-200 text-gray-600 hover:bg-gray-50' : 
+                                tag === 'fun' ? 'border-purple-200 text-purple-600 hover:bg-purple-50' : 
+                                tag === 'personal' ? 'border-pink-200 text-pink-600 hover:bg-pink-50' : 
+                                'border-gray-200 text-gray-600 hover:bg-gray-50'}`}
                             >
                               + {tag}
                             </button>
