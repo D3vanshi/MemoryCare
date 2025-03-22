@@ -31,6 +31,8 @@ export default function QuizPage() {
   const [, setLocation] = useLocation();
   const { user } = useAuth();
   const { toast } = useToast();
+  // Determine if user can create/manage quizzes (caretakers and students only)
+  const canManageQuizzes = user && (user.role === "caretaker" || user.role === "student");
   const [isCaretakerView, setIsCaretakerView] = useState(false);
   const [activeQuiz, setActiveQuiz] = useState<Quiz | null>(null);
   const [isAddQuizOpen, setIsAddQuizOpen] = useState(false);
@@ -41,14 +43,15 @@ export default function QuizPage() {
   const [timeLeft, setTimeLeft] = useState(45);
   const [timerActive, setTimerActive] = useState(false);
   
-  // Check URL for caretaker parameter
+  // Set caretaker view based on URL and user role
   const location = window.location.search;
   useEffect(() => {
     const params = new URLSearchParams(location);
-    if (params.get('role') === 'caretaker') {
+    // Only allow caretaker view if user has appropriate role
+    if (params.get('role') === 'caretaker' && canManageQuizzes) {
       setIsCaretakerView(true);
     }
-  }, [location]);
+  }, [location, canManageQuizzes]);
 
   const { data: quizzes, isLoading } = useQuery<Quiz[]>({
     queryKey: ["/api/quizzes"]
@@ -255,7 +258,7 @@ export default function QuizPage() {
               <ChevronLeft className="h-6 w-6" />
             </Button>
             <h1 className="text-2xl font-bold text-gray-800">Memory Quiz</h1>
-            {user && (user.role === "caretaker" || user.role === "student") && (
+            {canManageQuizzes && (
               <Button 
                 variant="outline"
                 size="sm"
@@ -665,15 +668,49 @@ export default function QuizPage() {
                       ></div>
                     </div>
                     
-                    <div className="space-y-2 text-sm text-gray-600">
+                    <div className="space-y-3 p-4 border rounded-lg bg-gray-50 mb-4">
+                      <h3 className="font-medium text-lg text-gray-800">Memory Analysis</h3>
                       {score / (activeQuiz.questions as unknown as QuizQuestion[]).length >= 0.8 ? (
-                        <p>Excellent job! You're showing strong memory skills.</p>
+                        <>
+                          <div className="flex items-center gap-2 text-green-600 font-medium">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                            <span>Excellent memory recall! (Score: {score}/{(activeQuiz.questions as unknown as QuizQuestion[]).length})</span>
+                          </div>
+                          <p className="text-gray-700">You demonstrated strong memory skills and excellent recall ability. Your brain is functioning at a high cognitive level.</p>
+                          <div className="flex flex-col gap-1 text-sm text-gray-600">
+                            <p>• Your short-term memory appears to be functioning very well</p>
+                            <p>• You're demonstrating good information processing</p>
+                            <p>• Your cognitive recall systems are operating efficiently</p>
+                          </div>
+                        </>
                       ) : score / (activeQuiz.questions as unknown as QuizQuestion[]).length >= 0.6 ? (
-                        <p>Good work! You're making progress with your memory.</p>
+                        <>
+                          <div className="flex items-center gap-2 text-blue-600 font-medium">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                            <span>Good memory performance! (Score: {score}/{(activeQuiz.questions as unknown as QuizQuestion[]).length})</span>
+                          </div>
+                          <p className="text-gray-700">You showed good memory recall with room for improvement. Your brain is actively building neural connections.</p>
+                          <div className="flex flex-col gap-1 text-sm text-gray-600">
+                            <p>• Your recall ability is functioning well</p>
+                            <p>• You might benefit from memory association techniques</p>
+                            <p>• Regular practice will help strengthen these pathways</p>
+                          </div>
+                        </>
                       ) : (
-                        <p>Keep practicing! Regular exercises will help improve your memory.</p>
+                        <>
+                          <div className="flex items-center gap-2 text-amber-600 font-medium">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                            <span>Memory needs exercise! (Score: {score}/{(activeQuiz.questions as unknown as QuizQuestion[]).length})</span>
+                          </div>
+                          <p className="text-gray-700">Your memory recall shows opportunity for improvement. Regular cognitive exercises will strengthen these neural pathways.</p>
+                          <div className="flex flex-col gap-1 text-sm text-gray-600">
+                            <p>• Try memory techniques like visualization and association</p>
+                            <p>• Break information into smaller chunks for better recall</p>
+                            <p>• Daily practice with various memory exercises is recommended</p>
+                          </div>
+                        </>
                       )}
-                      <p>Remember to take these quizzes regularly for best results.</p>
+                      <p className="text-sm italic text-gray-500 pt-2 border-t">Next recommended quiz: Tomorrow at approximately the same time</p>
                     </div>
                   </div>
                   
