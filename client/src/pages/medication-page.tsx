@@ -116,17 +116,16 @@ export default function MedicationPage() {
 
   const deleteMedicationMutation = useMutation({
     mutationFn: async (id: number) => {
-      await apiRequest("DELETE", `/api/medications/${id}`, undefined);
+      await apiRequest("DELETE", `/api/medications/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/medications"] });
-      setMedicationToDelete(null);
+      queryClient.invalidateQueries({ queryKey: ["/api/medications/upcoming"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/activities/recent"] });
       toast({
         title: "Medication deleted",
-        description: "Your medication reminder has been deleted.",
+        description: "The medication has been deleted successfully.",
       });
-      // Force a refetch to update the UI
-      refetch();
     },
     onError: (error) => {
       toast({

@@ -1,9 +1,9 @@
-import { pgTable, text, serial, integer, boolean, timestamp, json } from "drizzle-orm/pg-core";
+import { mysqlTable, text, int, timestamp, json, datetime, mysqlEnum, varchar } from "drizzle-orm/mysql-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-export const users = pgTable("users", {
-  id: serial("id").primaryKey(),
+export const users = mysqlTable("users", {
+  id: int("id").primaryKey().autoincrement(),
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
   name: text("name").notNull(),
@@ -17,9 +17,9 @@ export const insertUserSchema = createInsertSchema(users).pick({
   role: true,
 });
 
-export const events = pgTable("events", {
-  id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull(),
+export const events = mysqlTable("events", {
+  id: int("id").primaryKey().autoincrement(),
+  userId: int("user_id").notNull(),
   title: text("title").notNull(),
   date: text("date").notNull(),
   type: text("type").notNull().default("event"),
@@ -34,13 +34,14 @@ export const insertEventSchema = createInsertSchema(events).pick({
   color: true,
 });
 
-export const medications = pgTable("medications", {
-  id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull(),
+export const medications = mysqlTable("medications", {
+  id: int("id").primaryKey().autoincrement(),
+  userId: int("user_id").notNull(),
   name: text("name").notNull(),
   time: text("time").notNull(),
   frequency: text("frequency").notNull(),
   notes: text("notes"),
+  taken: timestamp("taken"),
 });
 
 export const insertMedicationSchema = createInsertSchema(medications).pick({
@@ -51,9 +52,9 @@ export const insertMedicationSchema = createInsertSchema(medications).pick({
   notes: true,
 });
 
-export const photos = pgTable("photos", {
-  id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull(),
+export const photos = mysqlTable("photos", {
+  id: int("id").primaryKey().autoincrement(),
+  userId: int("user_id").notNull(),
   title: text("title").notNull(),
   description: text("description"),
   imageUrl: text("image_url").notNull(),
@@ -70,14 +71,22 @@ export const insertPhotoSchema = createInsertSchema(photos).pick({
   date: true,
 });
 
-export const quizzes = pgTable("quizzes", {
-  id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull(),
-  patientId: integer("patient_id"),
-  title: text("title").notNull(),
-  questions: json("questions").notNull(),
-  lastTaken: timestamp("last_taken"),
-  nextReview: timestamp("next_review"),
+export type QuizQuestion = {
+  id: number;
+  question: string;
+  options: string[];
+  correctOption: number;
+  imageUrl: string | null;
+}
+
+export const quizzes = mysqlTable("quizzes", {
+  id: int("id").primaryKey().autoincrement(),
+  userId: int("user_id").notNull(),
+  patientId: int("patient_id"),
+  title: varchar("title", { length: 255 }).notNull(),
+  questions: json("questions").$type<QuizQuestion[]>().notNull(),
+  lastTaken: datetime("last_taken"),
+  nextReview: datetime("next_review"),
 });
 
 export const insertQuizSchema = createInsertSchema(quizzes).pick({
@@ -85,14 +94,16 @@ export const insertQuizSchema = createInsertSchema(quizzes).pick({
   patientId: true,
   title: true,
   questions: true,
+  lastTaken: true,
+  nextReview: true,
 });
 
-export const quizResults = pgTable("quiz_results", {
-  id: serial("id").primaryKey(),
-  quizId: integer("quiz_id").notNull(),
-  userId: integer("user_id").notNull(),
-  score: integer("score").notNull(),
-  totalQuestions: integer("total_questions").notNull(),
+export const quizResults = mysqlTable("quiz_results", {
+  id: int("id").primaryKey().autoincrement(),
+  quizId: int("quiz_id").notNull(),
+  userId: int("user_id").notNull(),
+  score: int("score").notNull(),
+  totalQuestions: int("total_questions").notNull(),
   date: timestamp("date").notNull().defaultNow(),
 });
 
@@ -101,11 +112,12 @@ export const insertQuizResultSchema = createInsertSchema(quizResults).pick({
   userId: true,
   score: true,
   totalQuestions: true,
+  date: true,
 });
 
-export const notes = pgTable("notes", {
-  id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull(),
+export const notes = mysqlTable("notes", {
+  id: int("id").primaryKey().autoincrement(),
+  userId: int("user_id").notNull(),
   title: text("title").notNull(),
   content: text("content").notNull(),
   tags: json("tags").default([]),
@@ -117,11 +129,12 @@ export const insertNoteSchema = createInsertSchema(notes).pick({
   title: true,
   content: true,
   tags: true,
+  date: true,
 });
 
-export const activities = pgTable("activities", {
-  id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull(),
+export const activities = mysqlTable("activities", {
+  id: int("id").primaryKey().autoincrement(),
+  userId: int("user_id").notNull(),
   type: text("type").notNull(),
   description: text("description").notNull(),
   date: timestamp("date").notNull().defaultNow(),
@@ -131,6 +144,7 @@ export const insertActivitySchema = createInsertSchema(activities).pick({
   userId: true,
   type: true,
   description: true,
+  date: true,
 });
 
 export type User = typeof users.$inferSelect;

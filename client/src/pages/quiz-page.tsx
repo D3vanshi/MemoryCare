@@ -15,40 +15,37 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { ChevronLeft, ChevronRight, Clock, Check, Brain, User, ArrowRight, PlusCircle, Plus } from "lucide-react";
-import { Quiz, QuizResult } from "@shared/schema";
+import { ChevronLeft, ChevronRight, Clock, Check, Brain, User, ArrowRight, PlusCircle, Plus, AlertCircle } from "lucide-react";
+import { Quiz, QuizQuestion, QuizResult } from "@shared/schema";
 import { z } from "zod";
 
-type QuizQuestion = {
-  id: string;
-  question: string;
-  options: string[];
-  correctAnswer: string;
-  imageUrl?: string;
-};
-
 export default function QuizPage() {
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
   const { user } = useAuth();
   const { toast } = useToast();
   const [isCaretakerView, setIsCaretakerView] = useState(false);
   const [activeQuiz, setActiveQuiz] = useState<Quiz | null>(null);
   const [isAddQuizOpen, setIsAddQuizOpen] = useState(false);
+  const [isReviewAnswersOpen, setIsReviewAnswersOpen] = useState(false);
   const [quizState, setQuizState] = useState<'intro' | 'questions' | 'results'>('intro');
   const [currentQuestion, setCurrentQuestion] = useState(0);
-  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [answers, setAnswers] = useState<Record<number, string>>({});
   const [score, setScore] = useState(0);
   const [timeLeft, setTimeLeft] = useState(45);
   const [timerActive, setTimerActive] = useState(false);
   
-  // Check URL for caretaker parameter
-  const location = window.location.search;
+  // Check URL for caretaker parameter and handle role restrictions
   useEffect(() => {
-    const params = new URLSearchParams(location);
+    const params = new URLSearchParams(window.location.search);
     if (params.get('role') === 'caretaker') {
+      if (user?.role === 'patient') {
+        // Redirect patients back to login if they try to access caretaker view
+        setLocation('/login');
+        return;
+      }
       setIsCaretakerView(true);
     }
-  }, [location]);
+  }, [window.location.search, user?.role, setLocation]);
 
   const { data: quizzes, isLoading } = useQuery<Quiz[]>({
     queryKey: ["/api/quizzes"]
@@ -60,14 +57,13 @@ export default function QuizPage() {
   });
 
   const addQuizSchema = z.object({
-    title: z.string().min(1, "Title is required"),
+    title: z.string().min(1, { message: "Title is required" }),
     questions: z.array(z.object({
-      question: z.string().min(1, "Question is required"),
-      options: z.array(z.string()).min(2, "At least 2 options are required"),
-      correctAnswer: z.string().min(1, "Correct answer is required"),
-      imageUrl: z.string().optional(),
-    })).min(1, "At least one question is required"),
-    patientId: z.number().optional(),
+      question: z.string().min(1, { message: "Question is required" }),
+      options: z.array(z.string()).min(2, { message: "At least 2 options are required" }),
+      correctOption: z.number().min(0, { message: "Please select the correct answer" }),
+      imageUrl: z.string().optional()
+    })).min(1, { message: "At least one question is required" })
   });
 
   const addQuizForm = useForm({
@@ -77,7 +73,7 @@ export default function QuizPage() {
         {
           question: "",
           options: ["", "", "", ""],
-          correctAnswer: "",
+          correctOption: 0,
           imageUrl: ""
         }
       ],
@@ -130,12 +126,145 @@ export default function QuizPage() {
     }
   });
 
-  const onSubmitQuiz = (data: any) => {
-    addQuizMutation.mutate(data);
+  const deleteQuizMutation = useMutation({
+    mutationFn: async (quizId: number) => {
+      await apiRequest("DELETE", `/api/quizzes/${quizId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/quizzes"] });
+      toast({
+        title: "Quiz deleted",
+        description: "The quiz has been deleted successfully.",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Failed to delete quiz",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  });
+
+  const [quizToDelete, setQuizToDelete] = useState<Quiz | null>(null);
+  const [quizToEdit, setQuizToEdit] = useState<Quiz | null>(null);
+
+  const handleEdit = (quiz: Quiz) => {
+    // Parse questions if they're stored as a string
+    const questions = typeof quiz.questions === 'string' 
+      ? JSON.parse(quiz.questions) 
+      : quiz.questions;
+
+    addQuizForm.reset({
+      title: quiz.title,
+      questions: questions.map((q: QuizQuestion) => ({
+        question: q.question,
+        options: q.options,
+        correctOption: q.correctOption,
+        imageUrl: q.imageUrl || ''
+      }))
+    });
+    setIsAddQuizOpen(true);
   };
 
+  const handleDelete = (quiz: Quiz) => {
+    if (!user) {
+      toast({
+        title: "Authentication required",
+        description: "Please log in to manage quizzes.",
+        variant: "destructive"
+      });
+      return;
+    }
+    setQuizToDelete(quiz);
+  };
+
+  const onSubmitQuiz = async (data: z.infer<typeof addQuizSchema>) => {
+    if (!user) {
+      toast({
+        title: "Authentication required",
+        description: "Please log in to manage quizzes.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      // Format questions for storage
+      const formattedQuestions = data.questions.map((q, index) => ({
+        id: index + 1,
+        question: q.question,
+        options: q.options.filter(opt => opt.trim() !== ''),
+        correctOption: q.correctOption,
+        imageUrl: q.imageUrl || null
+      }));
+
+      await addQuizMutation.mutateAsync({
+        title: data.title,
+        questions: formattedQuestions,
+        userId: user.id,
+        patientId: null
+      });
+
+      addQuizForm.reset();
+      setIsAddQuizOpen(false);
+      toast({
+        title: "Success",
+        description: "Quiz has been saved successfully.",
+      });
+    } catch (error) {
+      console.error('Failed to create quiz:', error);
+      toast({
+        title: "Error",
+        description: "Failed to create quiz. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const updateQuizMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const { id, ...quizData } = data;
+      const res = await apiRequest("PATCH", `/api/quizzes/${id}`, quizData);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/quizzes"] });
+      setIsAddQuizOpen(false);
+      setQuizToEdit(null);
+      addQuizForm.reset();
+      toast({
+        title: "Quiz updated",
+        description: "Your quiz has been updated successfully.",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Failed to update quiz",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  });
+
   const startQuiz = (quiz: Quiz) => {
-    setActiveQuiz(quiz);
+    if (!user) {
+      toast({
+        title: "Authentication required",
+        description: "Please log in to take or preview quizzes.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const questions = typeof quiz.questions === 'string' 
+      ? JSON.parse(quiz.questions) 
+      : quiz.questions;
+
+    setActiveQuiz({
+      ...quiz,
+      questions: questions
+    });
     setQuizState('questions');
     setCurrentQuestion(0);
     setAnswers({});
@@ -143,7 +272,7 @@ export default function QuizPage() {
     setTimeLeft(45);
   };
 
-  const selectAnswer = (questionId: string, answer: string) => {
+  const selectAnswer = (questionId: number, answer: string) => {
     setAnswers({
       ...answers,
       [questionId]: answer
@@ -152,18 +281,19 @@ export default function QuizPage() {
 
   const nextQuestion = () => {
     if (!activeQuiz) return;
-    const questions = activeQuiz.questions as unknown as QuizQuestion[];
+    const questions = activeQuiz.questions as QuizQuestion[];
     
     if (currentQuestion < questions.length - 1) {
       setCurrentQuestion(currentQuestion + 1);
       setTimeLeft(45);
     } else {
       // Calculate score
-      const questions = activeQuiz.questions as unknown as QuizQuestion[];
       let newScore = 0;
       
       questions.forEach(question => {
-        if (answers[question.id] === question.correctAnswer) {
+        const selectedAnswer = answers[question.id];
+        const correctAnswer = question.options[question.correctOption];
+        if (selectedAnswer === correctAnswer) {
           newScore++;
         }
       });
@@ -214,7 +344,7 @@ export default function QuizPage() {
   // Get current question
   const getCurrentQuestion = () => {
     if (!activeQuiz) return null;
-    const questions = activeQuiz.questions as unknown as QuizQuestion[];
+    const questions = activeQuiz.questions as QuizQuestion[];
     return questions[currentQuestion];
   };
 
@@ -226,7 +356,7 @@ export default function QuizPage() {
       {
         question: "",
         options: ["", "", "", ""],
-        correctAnswer: "",
+        correctOption: 0,
         imageUrl: ""
       }
     ]);
@@ -238,6 +368,11 @@ export default function QuizPage() {
     if (questions.length > 1) {
       addQuizForm.setValue('questions', questions.filter((_, i) => i !== index));
     }
+  };
+
+  // Add this function to handle reviewing answers
+  const handleReviewAnswers = () => {
+    setIsReviewAnswersOpen(true);
   };
 
   return (
@@ -255,7 +390,7 @@ export default function QuizPage() {
               <ChevronLeft className="h-6 w-6" />
             </Button>
             <h1 className="text-2xl font-bold text-gray-800">Memory Quiz</h1>
-            {user && (user.role === "caretaker" || user.role === "student") && (
+            {user && (user.role === "caretaker") && (
               <Button 
                 variant="outline"
                 size="sm"
@@ -280,7 +415,7 @@ export default function QuizPage() {
       </header>
 
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {isCaretakerView ? (
+        {isCaretakerView && user?.role !== 'patient' ? (
           /* Caretaker View */
           <div>
             <div className="flex justify-between items-center mb-6">
@@ -300,21 +435,38 @@ export default function QuizPage() {
               </div>
             ) : quizzes && quizzes.length > 0 ? (
               <div className="grid gap-4">
-                {quizzes.map((quiz) => (
-                  <Card key={quiz.id}>
-                    <CardHeader>
-                      <CardTitle>{quiz.title}</CardTitle>
-                      <CardDescription>
-                        {(quiz.questions as unknown as QuizQuestion[]).length} questions
-                        {quiz.lastTaken && ` - Last taken: ${new Date(quiz.lastTaken).toLocaleDateString()}`}
-                      </CardDescription>
-                    </CardHeader>
-                    <CardFooter className="flex justify-between">
-                      <Button variant="outline">Edit</Button>
-                      <Button onClick={() => startQuiz(quiz)}>Preview Quiz</Button>
-                    </CardFooter>
-                  </Card>
-                ))}
+                {quizzes.map((quiz) => {
+                  const questions = typeof quiz.questions === 'string' 
+                    ? JSON.parse(quiz.questions) 
+                    : quiz.questions;
+                  
+                  return (
+                    <Card key={quiz.id}>
+                      <CardHeader>
+                        <CardTitle>{quiz.title}</CardTitle>
+                        <CardDescription>
+                          {questions.length} questions
+                          {quiz.lastTaken && ` - Last taken: ${new Date(quiz.lastTaken).toLocaleDateString()}`}
+                        </CardDescription>
+                      </CardHeader>
+                      <CardFooter className="flex justify-between">
+                        <div className="flex gap-2">
+                          <Button variant="outline" onClick={() => handleEdit(quiz)}>
+                            Edit
+                          </Button>
+                          <Button 
+                            variant="outline" 
+                            className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                            onClick={() => handleDelete(quiz)}
+                          >
+                            Delete
+                          </Button>
+                        </div>
+                        <Button onClick={() => startQuiz(quiz)}>Preview Quiz</Button>
+                      </CardFooter>
+                    </Card>
+                  );
+                })}
               </div>
             ) : (
               <Card className="py-16 text-center">
@@ -329,8 +481,57 @@ export default function QuizPage() {
               </Card>
             )}
 
-            {/* Create Quiz Dialog */}
-            <Dialog open={isAddQuizOpen} onOpenChange={setIsAddQuizOpen}>
+            {/* Delete Confirmation Dialog */}
+            <Dialog open={!!quizToDelete} onOpenChange={(open) => !open && setQuizToDelete(null)}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Delete Quiz</DialogTitle>
+                  <DialogDescription>
+                    Are you sure you want to delete this quiz? This action cannot be undone.
+                  </DialogDescription>
+                </DialogHeader>
+                <DialogFooter>
+                  <Button
+                    variant="outline"
+                    onClick={() => setQuizToDelete(null)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    onClick={() => {
+                      if (quizToDelete) {
+                        deleteQuizMutation.mutate(quizToDelete.id);
+                        setQuizToDelete(null);
+                      }
+                    }}
+                  >
+                    Delete Quiz
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
+            {/* Create/Edit Quiz Dialog */}
+            <Dialog 
+              open={isAddQuizOpen} 
+              onOpenChange={(open) => {
+                setIsAddQuizOpen(open);
+                if (!open) {
+                  setQuizToEdit(null);
+                  addQuizForm.reset({
+                    title: "",
+                    questions: [{
+                      question: "",
+                      options: ["", "", "", ""],
+                      correctOption: 0,
+                      imageUrl: ""
+                    }],
+                    patientId: undefined
+                  });
+                }
+              }}
+            >
               <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>Create New Quiz</DialogTitle>
@@ -433,18 +634,18 @@ export default function QuizPage() {
                                           />
                                           <FormField
                                             control={addQuizForm.control}
-                                            name={`questions.${index}.correctAnswer`}
+                                            name={`questions.${index}.correctOption`}
                                             render={({ field: radioField }) => (
                                               <FormItem>
                                                 <FormControl>
                                                   <RadioGroup
-                                                    onValueChange={radioField.onChange}
-                                                    value={radioField.value}
+                                                    onValueChange={(val) => radioField.onChange(Number(val))}
+                                                    value={String(radioField.value)}
                                                     className="flex"
                                                   >
                                                     <div className="flex items-center">
                                                       <RadioGroupItem
-                                                        value={field.value}
+                                                        value={String(optionIndex)}
                                                         id={`option-${index}-${optionIndex}`}
                                                         className="mr-2"
                                                       />
@@ -538,24 +739,30 @@ export default function QuizPage() {
                   ) : quizzes && quizzes.length > 0 ? (
                     <div className="space-y-4">
                       <h3 className="font-medium text-gray-800">Available Quizzes</h3>
-                      {quizzes.map((quiz) => (
-                        <Card key={quiz.id} className="hover:shadow-md transition-shadow">
-                          <CardHeader className="pb-2">
-                            <CardTitle className="text-lg">{quiz.title}</CardTitle>
-                            <CardDescription>
-                              {(quiz.questions as unknown as QuizQuestion[]).length} questions
-                            </CardDescription>
-                          </CardHeader>
-                          <CardFooter>
-                            <Button 
-                              className="w-full"
-                              onClick={() => startQuiz(quiz)}
-                            >
-                              Start Quiz
-                            </Button>
-                          </CardFooter>
-                        </Card>
-                      ))}
+                      {quizzes.map((quiz) => {
+                        const questions = typeof quiz.questions === 'string' 
+                          ? JSON.parse(quiz.questions) 
+                          : quiz.questions;
+                        
+                        return (
+                          <Card key={quiz.id} className="hover:shadow-md transition-shadow">
+                            <CardHeader className="pb-2">
+                              <CardTitle className="text-lg">{quiz.title}</CardTitle>
+                              <CardDescription>
+                                {questions.length} questions
+                              </CardDescription>
+                            </CardHeader>
+                            <CardFooter>
+                              <Button 
+                                className="w-full"
+                                onClick={() => startQuiz(quiz)}
+                              >
+                                Start Quiz
+                              </Button>
+                            </CardFooter>
+                          </Card>
+                        );
+                      })}
                     </div>
                   ) : (
                     <div className="text-center py-8">
@@ -574,7 +781,7 @@ export default function QuizPage() {
                 <CardHeader className="pb-2">
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-xl">
-                      Question {currentQuestion + 1} of {(activeQuiz.questions as unknown as QuizQuestion[]).length}
+                      Question {currentQuestion + 1} of {(activeQuiz.questions as QuizQuestion[]).length}
                     </CardTitle>
                     <div className="px-3 py-1 bg-primary-100 text-primary-700 rounded-full text-sm font-medium">
                       Time: {String(Math.floor(timeLeft / 60)).padStart(2, '0')}:{String(timeLeft % 60).padStart(2, '0')}
@@ -593,7 +800,7 @@ export default function QuizPage() {
                       {getCurrentQuestion()?.imageUrl && (
                         <div className="mb-4 flex justify-center">
                           <img 
-                            src={getCurrentQuestion()?.imageUrl} 
+                            src={getCurrentQuestion()?.imageUrl || ''} 
                             alt="Question visual" 
                             className="rounded-lg shadow-md max-h-60" 
                           />
@@ -604,12 +811,12 @@ export default function QuizPage() {
                         {getCurrentQuestion()?.options.map((option, idx) => (
                           <div 
                             key={idx}
-                            className={`p-3 border ${answers[getCurrentQuestion()?.id || ''] === option ? 'border-primary-500 bg-primary-50' : 'border-gray-300'} rounded-lg hover:bg-gray-50 cursor-pointer`}
-                            onClick={() => selectAnswer(getCurrentQuestion()?.id || '', option)}
+                            className={`p-3 border ${answers[getCurrentQuestion()?.id || 0] === option ? 'border-primary-500 bg-primary-50' : 'border-gray-300'} rounded-lg hover:bg-gray-50 cursor-pointer`}
+                            onClick={() => selectAnswer(getCurrentQuestion()?.id || 0, option)}
                           >
                             <div className="flex items-center">
-                              <div className={`w-5 h-5 rounded-full ${answers[getCurrentQuestion()?.id || ''] === option ? 'bg-primary-500' : 'border-2 border-gray-300'} mr-3 flex-shrink-0 flex items-center justify-center`}>
-                                {answers[getCurrentQuestion()?.id || ''] === option && (
+                              <div className={`w-5 h-5 rounded-full ${answers[getCurrentQuestion()?.id || 0] === option ? 'bg-primary-500' : 'border-2 border-gray-300'} mr-3 flex-shrink-0 flex items-center justify-center`}>
+                                {answers[getCurrentQuestion()?.id || 0] === option && (
                                   <Check className="h-3 w-3 text-white" />
                                 )}
                               </div>
@@ -631,9 +838,9 @@ export default function QuizPage() {
                   </Button>
                   <Button 
                     onClick={nextQuestion}
-                    disabled={!answers[getCurrentQuestion()?.id || '']}
+                    disabled={!answers[getCurrentQuestion()?.id || 0]}
                   >
-                    {currentQuestion < (activeQuiz.questions as unknown as QuizQuestion[]).length - 1 ? 'Next' : 'Finish'}
+                    {currentQuestion < (activeQuiz.questions as QuizQuestion[]).length - 1 ? 'Next' : 'Finish'}
                   </Button>
                 </CardFooter>
               </Card>
@@ -654,21 +861,21 @@ export default function QuizPage() {
                     <div className="flex items-center justify-between mb-4">
                       <span className="text-gray-700 font-medium">Your score:</span>
                       <span className="text-xl font-bold text-primary-600">
-                        {score}/{(activeQuiz.questions as unknown as QuizQuestion[]).length}
+                        {score}/{(activeQuiz.questions as QuizQuestion[]).length}
                       </span>
                     </div>
                     
                     <div className="w-full bg-gray-200 rounded-full h-4 mb-4">
                       <div 
                         className="bg-primary-500 h-4 rounded-full" 
-                        style={{ width: `${(score / (activeQuiz.questions as unknown as QuizQuestion[]).length) * 100}%` }}
+                        style={{ width: `${(score / (activeQuiz.questions as QuizQuestion[]).length) * 100}%` }}
                       ></div>
                     </div>
                     
                     <div className="space-y-2 text-sm text-gray-600">
-                      {score / (activeQuiz.questions as unknown as QuizQuestion[]).length >= 0.8 ? (
+                      {score / (activeQuiz.questions as QuizQuestion[]).length >= 0.8 ? (
                         <p>Excellent job! You're showing strong memory skills.</p>
-                      ) : score / (activeQuiz.questions as unknown as QuizQuestion[]).length >= 0.6 ? (
+                      ) : score / (activeQuiz.questions as QuizQuestion[]).length >= 0.6 ? (
                         <p>Good work! You're making progress with your memory.</p>
                       ) : (
                         <p>Keep practicing! Regular exercises will help improve your memory.</p>
@@ -681,6 +888,7 @@ export default function QuizPage() {
                     <Button 
                       variant="outline"
                       className="py-3 bg-primary-100 text-primary-700 rounded-lg font-medium hover:bg-primary-200"
+                      onClick={handleReviewAnswers}
                     >
                       Review Answers
                     </Button>
@@ -697,6 +905,66 @@ export default function QuizPage() {
           </div>
         )}
       </div>
+
+      {/* Add the Review Answers Dialog */}
+      <Dialog open={isReviewAnswersOpen} onOpenChange={setIsReviewAnswersOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Review Your Answers</DialogTitle>
+            <DialogDescription>
+              Let's go through your answers and see how you did
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-6">
+            {(activeQuiz?.questions as QuizQuestion[])?.map((question, index) => {
+              const selectedAnswer = answers[question.id];
+              const isCorrect = selectedAnswer === question.options[question.correctOption];
+              
+              return (
+                <div key={index} className="space-y-2">
+                  <div className="flex items-start space-x-3">
+                    <div className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center ${
+                      isCorrect ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'
+                    }`}>
+                      {isCorrect ? <Check className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-medium text-gray-900">Question {index + 1}</p>
+                      <p className="text-gray-700">{question.question}</p>
+                      {question.imageUrl && (
+                        <img 
+                          src={question.imageUrl} 
+                          alt="Question visual" 
+                          className="mt-2 rounded-lg max-h-40"
+                        />
+                      )}
+                      <div className="mt-3 space-y-2">
+                        <p className="text-sm font-medium text-gray-500">Your answer:</p>
+                        <p className={`text-sm ${isCorrect ? 'text-green-600' : 'text-red-600'}`}>
+                          {selectedAnswer}
+                        </p>
+                        {!isCorrect && (
+                          <>
+                            <p className="text-sm font-medium text-gray-500 mt-2">Correct answer:</p>
+                            <p className="text-sm text-green-600">
+                              {question.options[question.correctOption]}
+                            </p>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setIsReviewAnswersOpen(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

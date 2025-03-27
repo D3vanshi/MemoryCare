@@ -1,0 +1,2 @@
+ALTER TABLE medications
+ADD COLUMN taken TIMESTAMP NULL; 

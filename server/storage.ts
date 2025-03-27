@@ -1,303 +1,448 @@
-import { users, type User, type InsertUser, events, type Event, type InsertEvent, medications, type Medication, type InsertMedication, photos, type Photo, type InsertPhoto, quizzes, type Quiz, type InsertQuiz, quizResults, type QuizResult, type InsertQuizResult, notes, type Note, type InsertNote, activities, type Activity, type InsertActivity } from "@shared/schema";
+import { sql, eq } from "drizzle-orm";
+import { users, medications, photos, quizzes, quizResults, notes, activities, events } from "../shared/schema";
+import type { User, InsertUser, Medication, InsertMedication, Photo, InsertPhoto, Quiz, InsertQuiz, QuizResult, InsertQuizResult, Note, InsertNote, Activity, InsertActivity, Event, InsertEvent } from "../shared/schema";
+import { db } from "./db";
 import session from "express-session";
-import createMemoryStore from "memorystore";
+import { QuizQuestion } from "../shared/schema";
+import { MySqlDatabase } from "drizzle-orm/mysql2";
+import { createRequire } from "module";
 
-const MemoryStore = createMemoryStore(session);
+// Create session store
+const require = createRequire(import.meta.url);
+const MySQLStore = require("express-mysql-session")(session);
 
 // Interface for all storage operations
 export interface IStorage {
   // User operations
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
-  createUser(user: InsertUser): Promise<User>;
-  
-  // Event operations
-  getEventsByUserId(userId: number): Promise<Event[]>;
-  createEvent(event: InsertEvent): Promise<Event>;
+  createUser(data: InsertUser): Promise<User>;
   
   // Medication operations
   getMedicationsByUserId(userId: number): Promise<Medication[]>;
   getUpcomingMedications(userId: number): Promise<Medication[]>;
   getMedicationById(id: number): Promise<Medication | undefined>;
-  createMedication(medication: InsertMedication): Promise<Medication>;
+  createMedication(data: InsertMedication): Promise<Medication>;
   updateMedication(id: number, data: Partial<Medication>): Promise<Medication>;
   deleteMedication(id: number): Promise<void>;
   
   // Photo operations
   getPhotosByUserId(userId: number): Promise<Photo[]>;
   getPhotoCategories(userId: number): Promise<string[]>;
-  createPhoto(photo: InsertPhoto): Promise<Photo>;
+  createPhoto(data: InsertPhoto): Promise<Photo>;
   
   // Quiz operations
   getQuizzesByCreator(userId: number): Promise<Quiz[]>;
-  getQuizzesForPatient(userId: number): Promise<Quiz[]>;
-  createQuiz(quiz: InsertQuiz): Promise<Quiz>;
-  updateQuizLastTaken(quizId: number): Promise<void>;
+  getQuizzesByPatient(patientId: number): Promise<Quiz[]>;
+  getQuizById(id: number): Promise<Quiz | undefined>;
+  createQuiz(data: InsertQuiz): Promise<Quiz>;
+  updateQuiz(id: number, data: Partial<Quiz>): Promise<Quiz>;
+  deleteQuiz(id: number): Promise<void>;
   
   // Quiz results operations
   getQuizResultsByUserId(userId: number): Promise<QuizResult[]>;
-  createQuizResult(result: InsertQuizResult): Promise<QuizResult>;
+  createQuizResult(data: InsertQuizResult): Promise<QuizResult>;
   
   // Note operations
   getNotesByUserId(userId: number): Promise<Note[]>;
-  createNote(note: InsertNote): Promise<Note>;
+  getNoteById(id: number): Promise<Note | undefined>;
+  createNote(data: InsertNote): Promise<Note>;
+  updateNote(id: number, data: Partial<Note>): Promise<Note>;
+  deleteNote(id: number): Promise<void>;
+  
+  // Event operations
+  getEventsByUserId(userId: number): Promise<Event[]>;
+  getEventById(id: number): Promise<Event | undefined>;
+  createEvent(data: InsertEvent): Promise<Event>;
+  updateEvent(id: number, data: Partial<Event>): Promise<Event>;
+  deleteEvent(id: number): Promise<void>;
   
   // Activity operations
   getRecentActivities(userId: number): Promise<Activity[]>;
-  createActivity(activity: InsertActivity): Promise<Activity>;
+  createActivity(data: InsertActivity): Promise<Activity>;
   
   // Session store
-  sessionStore: session.SessionStore;
+  sessionStore: session.Store;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<number, User>;
-  private events: Map<number, Event>;
-  private medications: Map<number, Medication>;
-  private photos: Map<number, Photo>;
-  private quizzes: Map<number, Quiz>;
-  private quizResults: Map<number, QuizResult>;
-  private notes: Map<number, Note>;
-  private activities: Map<number, Activity>;
+export class DbStorage implements IStorage {
+  private db = db;
+  sessionStore: session.Store;
   
-  sessionStore: session.SessionStore;
-  
-  private userIdCounter: number = 1;
-  private eventIdCounter: number = 1;
-  private medicationIdCounter: number = 1;
-  private photoIdCounter: number = 1;
-  private quizIdCounter: number = 1;
-  private quizResultIdCounter: number = 1;
-  private noteIdCounter: number = 1;
-  private activityIdCounter: number = 1;
-
   constructor() {
-    this.users = new Map();
-    this.events = new Map();
-    this.medications = new Map();
-    this.photos = new Map();
-    this.quizzes = new Map();
-    this.quizResults = new Map();
-    this.notes = new Map();
-    this.activities = new Map();
-    
-    this.sessionStore = new MemoryStore({
-      checkPeriod: 86400000, // prune expired entries every 24h
+    this.sessionStore = new MySQLStore({
+      host: "localhost",
+      port: 3306,
+      user: "root",
+      password: "root",
+      database: "memorycare",
+      createDatabaseTable: true,
+      schema: {
+        tableName: 'sessions',
+        columnNames: {
+          session_id: 'session_id',
+          expires: 'expires',
+          data: 'data'
+        }
+      }
     });
-    
-    // Add a demo user with properly hashed password
-    // Using a pre-hashed version of "password" with salt
-    const hashedPassword = "d74ff0ee8da3b9806b18c877dbf29bbde50b5bd8e4dad7a3a725000feb82e8f1c0b000391b611dd0587289ca29151e6540e088dc992ab5ea40055694bb88a7ab.3ee861f8aacf9c30f4e8a6f85ff98031";
-    
-    const demoUser: User = {
-      id: this.userIdCounter++,
-      username: "demo@example.com",
-      password: hashedPassword,
-      name: "Demo User",
-      role: "patient"
-    };
-    this.users.set(demoUser.id, demoUser);
   }
 
-  // User methods
+  // User operations
   async getUser(id: number): Promise<User | undefined> {
-    return this.users.get(id);
+    const result = await this.db.select().from(users).where(eq(users.id, id));
+    return result[0];
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username
-    );
+    const result = await this.db.select().from(users).where(eq(users.username, username));
+    return result[0];
   }
 
-  async createUser(insertUser: InsertUser): Promise<User> {
-    const id = this.userIdCounter++;
-    const user: User = { ...insertUser, id };
-    this.users.set(id, user);
-    return user;
+  async createUser(data: InsertUser): Promise<User> {
+    const result = await this.db.insert(users).values(data);
+    const id = Number(result[0].insertId);
+    return { 
+      id, 
+      ...data,
+      role: data.role || 'patient' // Provide default role
+    };
   }
 
-  // Event methods
-  async getEventsByUserId(userId: number): Promise<Event[]> {
-    return Array.from(this.events.values()).filter(
-      (event) => event.userId === userId
-    );
-  }
-
-  async createEvent(insertEvent: InsertEvent): Promise<Event> {
-    const id = this.eventIdCounter++;
-    const event: Event = { ...insertEvent, id };
-    this.events.set(id, event);
-    return event;
-  }
-
-  // Medication methods
+  // Medication operations
   async getMedicationsByUserId(userId: number): Promise<Medication[]> {
-    return Array.from(this.medications.values()).filter(
-      (medication) => medication.userId === userId
-    );
+    return await this.db.select().from(medications).where(eq(medications.userId, userId));
   }
 
   async getUpcomingMedications(userId: number): Promise<Medication[]> {
-    const now = new Date();
-    const currentHour = now.getHours();
-    const currentMinutes = now.getMinutes();
-    const currentTimeString = `${currentHour.toString().padStart(2, '0')}:${currentMinutes.toString().padStart(2, '0')}`;
-    
-    const userMedications = await this.getMedicationsByUserId(userId);
-    
-    // Filter medications that are coming up in the next 2 hours
-    return userMedications.filter(medication => {
-      const [medHourStr, medMinuteStr] = medication.time.split(':');
-      const medHour = parseInt(medHourStr);
-      const medMinute = parseInt(medMinuteStr);
-      
-      // Convert both times to minutes for easier comparison
-      const currentTotalMinutes = currentHour * 60 + currentMinutes;
-      const medTotalMinutes = medHour * 60 + medMinute;
-      
-      // Check if medication is due in the next 2 hours (120 minutes)
-      const diff = medTotalMinutes - currentTotalMinutes;
-      return diff >= 0 && diff <= 120;
-    }).sort((a, b) => {
-      const [aHour, aMinute] = a.time.split(':').map(Number);
-      const [bHour, bMinute] = b.time.split(':').map(Number);
-      return (aHour * 60 + aMinute) - (bHour * 60 + bMinute);
-    });
+    try {
+      console.log('Fetching upcoming medications:');
+      console.log('- User ID:', userId);
+
+      // Get all untaken medications
+      const result = await this.db.select()
+        .from(medications)
+        .where(eq(medications.userId, userId))
+        .where(sql`${medications.taken} IS NULL`)
+        .orderBy(sql`${medications.time} ASC`);
+
+      console.log('- Found medications:', result);
+      return result;
+    } catch (error) {
+      console.error('Error fetching upcoming medications:', error);
+      console.error('Error details:', error instanceof Error ? error.message : error);
+      return [];
+    }
   }
 
   async getMedicationById(id: number): Promise<Medication | undefined> {
-    return this.medications.get(id);
+    const result = await this.db.select().from(medications).where(eq(medications.id, id));
+    return result[0];
   }
 
-  async createMedication(insertMedication: InsertMedication): Promise<Medication> {
-    const id = this.medicationIdCounter++;
-    const medication: Medication = { ...insertMedication, id };
-    this.medications.set(id, medication);
-    return medication;
+  async createMedication(data: InsertMedication): Promise<Medication> {
+    const result = await this.db.insert(medications).values(data);
+    const id = Number(result[0].insertId);
+    return { 
+      id, 
+      ...data,
+      notes: data.notes || null // Handle optional notes
+    };
   }
 
   async updateMedication(id: number, data: Partial<Medication>): Promise<Medication> {
-    const medication = await this.getMedicationById(id);
-    if (!medication) {
-      throw new Error("Medication not found");
+    await this.db.update(medications).set(data).where(eq(medications.id, id));
+    const updated = await this.getMedicationById(id);
+    if (!updated) throw new Error("Failed to update medication");
+    return updated;
+  }
+
+  async markMedicationAsTaken(id: number): Promise<Medication> {
+    await this.db.update(medications)
+      .set({ taken: new Date() })
+      .where(eq(medications.id, id));
+    const updated = await this.getMedicationById(id);
+    if (!updated) throw new Error("Failed to mark medication as taken");
+    return updated;
+  }
+
+  async snoozeMedication(id: number, snoozeTime: Date): Promise<Medication> {
+    try {
+      console.log('Snoozing medication:', id);
+      console.log('Original snooze time:', snoozeTime);
+      
+      // Format time as HH:mm:ss
+      const formattedTime = snoozeTime.toLocaleTimeString('en-US', { 
+        hour12: false,
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      });
+      
+      console.log('Formatted snooze time:', formattedTime);
+      
+      await this.db.update(medications)
+        .set({ time: formattedTime })
+        .where(eq(medications.id, id));
+      
+      const updated = await this.getMedicationById(id);
+      if (!updated) throw new Error("Failed to snooze medication");
+      
+      console.log('Updated medication:', updated);
+      return updated;
+    } catch (error) {
+      console.error('Error snoozing medication:', error);
+      throw error;
     }
-    
-    const updatedMedication = { ...medication, ...data };
-    this.medications.set(id, updatedMedication);
-    return updatedMedication;
   }
 
   async deleteMedication(id: number): Promise<void> {
-    this.medications.delete(id);
+    await this.db.delete(medications).where(eq(medications.id, id));
   }
 
-  // Photo methods
+  // Photo operations
   async getPhotosByUserId(userId: number): Promise<Photo[]> {
-    return Array.from(this.photos.values()).filter(
-      (photo) => photo.userId === userId
-    );
+    return await this.db.select().from(photos).where(eq(photos.userId, userId));
   }
 
   async getPhotoCategories(userId: number): Promise<string[]> {
-    const userPhotos = await this.getPhotosByUserId(userId);
-    const categories = new Set<string>();
-    
-    userPhotos.forEach(photo => {
-      if (photo.category) {
-        categories.add(photo.category);
-      }
-    });
-    
-    return Array.from(categories);
+    const result = await this.db.select({ category: photos.category })
+      .from(photos)
+      .where(eq(photos.userId, userId));
+    const categories = new Set(result.map(r => r.category));
+    return Array.from(categories).filter((c): c is string => c !== null);
   }
 
-  async createPhoto(insertPhoto: InsertPhoto): Promise<Photo> {
-    const id = this.photoIdCounter++;
-    const photo: Photo = { ...insertPhoto, id };
-    this.photos.set(id, photo);
-    return photo;
+  async createPhoto(data: InsertPhoto): Promise<Photo> {
+    const result = await this.db.insert(photos).values(data);
+    const id = Number(result[0].insertId);
+    return { 
+      id, 
+      ...data,
+      description: data.description || null,
+      category: data.category || null
+    };
   }
 
-  // Quiz methods
+  // Quiz operations
   async getQuizzesByCreator(userId: number): Promise<Quiz[]> {
-    return Array.from(this.quizzes.values()).filter(
-      (quiz) => quiz.userId === userId
-    );
+    return await this.db.select().from(quizzes).where(eq(quizzes.userId, userId));
   }
 
-  async getQuizzesForPatient(userId: number): Promise<Quiz[]> {
-    return Array.from(this.quizzes.values()).filter(
-      (quiz) => !quiz.patientId || quiz.patientId === userId
-    );
+  async getQuizzesByPatient(patientId: number): Promise<Quiz[]> {
+    return await this.db.select().from(quizzes).where(eq(quizzes.patientId, patientId));
   }
 
-  async createQuiz(insertQuiz: InsertQuiz): Promise<Quiz> {
-    const id = this.quizIdCounter++;
-    const quiz: Quiz = { ...insertQuiz, id, lastTaken: null, nextReview: null };
-    this.quizzes.set(id, quiz);
+  async getQuizById(id: number): Promise<Quiz | undefined> {
+    const [quiz] = await this.db.select().from(quizzes).where(eq(quizzes.id, id));
     return quiz;
   }
 
-  async updateQuizLastTaken(quizId: number): Promise<void> {
-    const quiz = this.quizzes.get(quizId);
-    if (quiz) {
-      quiz.lastTaken = new Date();
-      
-      // Calculate next review date based on spaced repetition algorithm
-      // Simple implementation: review again in 3 days
-      const nextReview = new Date();
-      nextReview.setDate(nextReview.getDate() + 3);
-      quiz.nextReview = nextReview;
-      
-      this.quizzes.set(quizId, quiz);
-    }
-  }
-
-  // Quiz result methods
-  async getQuizResultsByUserId(userId: number): Promise<QuizResult[]> {
-    return Array.from(this.quizResults.values()).filter(
-      (result) => result.userId === userId
-    );
-  }
-
-  async createQuizResult(insertResult: InsertQuizResult): Promise<QuizResult> {
-    const id = this.quizResultIdCounter++;
-    const result: QuizResult = { ...insertResult, id, date: new Date() };
-    this.quizResults.set(id, result);
-    return result;
-  }
-
-  // Note methods
-  async getNotesByUserId(userId: number): Promise<Note[]> {
-    return Array.from(this.notes.values()).filter(
-      (note) => note.userId === userId
-    ).sort((a, b) => {
-      return new Date(b.date).getTime() - new Date(a.date).getTime();
+  async createQuiz(data: InsertQuiz): Promise<Quiz> {
+    const result = await this.db.insert(quizzes).values({
+      ...data,
+      questions: data.questions as QuizQuestion[],
+      lastTaken: data.lastTaken || null,
+      nextReview: data.nextReview || null,
+      patientId: data.patientId || null
     });
+    const id = Number(result[0].insertId);
+    return {
+      id,
+      ...data,
+      questions: data.questions as QuizQuestion[],
+      lastTaken: data.lastTaken || null,
+      nextReview: data.nextReview || null,
+      patientId: data.patientId || null
+    };
   }
 
-  async createNote(insertNote: InsertNote): Promise<Note> {
-    const id = this.noteIdCounter++;
-    const note: Note = { ...insertNote, id, date: new Date() };
-    this.notes.set(id, note);
+  async updateQuiz(id: number, data: Partial<Quiz>): Promise<Quiz> {
+    await this.db.update(quizzes)
+      .set({
+        ...data,
+        questions: data.questions as QuizQuestion[] | undefined,
+        lastTaken: data.lastTaken || null,
+        nextReview: data.nextReview || null,
+        patientId: data.patientId || null
+      })
+      .where(eq(quizzes.id, id));
+    
+    const [updatedQuiz] = await this.db.select()
+      .from(quizzes)
+      .where(eq(quizzes.id, id));
+    
+    if (!updatedQuiz) {
+      throw new Error("Failed to update quiz");
+    }
+    
+    return updatedQuiz;
+  }
+
+  async deleteQuiz(id: number): Promise<void> {
+    await this.db.delete(quizzes).where(eq(quizzes.id, id));
+  }
+
+  async updateQuizLastTaken(id: number, date: Date): Promise<void> {
+    await this.db.update(quizzes)
+      .set({ lastTaken: date })
+      .where(eq(quizzes.id, id));
+  }
+
+  // Quiz results operations
+  async getQuizResultsByUserId(userId: number): Promise<QuizResult[]> {
+    return await this.db.select().from(quizResults).where(eq(quizResults.userId, userId));
+  }
+
+  async createQuizResult(data: InsertQuizResult): Promise<QuizResult> {
+    const result = await this.db.insert(quizResults).values({
+      ...data,
+      date: data.date || new Date()
+    });
+    const id = Number(result[0].insertId);
+    return { 
+      id,
+      ...data,
+      date: data.date || new Date()
+    };
+  }
+
+  // Note operations
+  async getNotesByUserId(userId: number): Promise<Note[]> {
+    return await this.db.select().from(notes).where(eq(notes.userId, userId));
+  }
+
+  async getNoteById(id: number): Promise<Note | undefined> {
+    const [note] = await this.db.select().from(notes).where(eq(notes.id, id));
     return note;
   }
 
-  // Activity methods
-  async getRecentActivities(userId: number): Promise<Activity[]> {
-    return Array.from(this.activities.values())
-      .filter((activity) => activity.userId === userId)
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-      .slice(0, 10); // Get only 10 most recent activities
+  async createNote(data: InsertNote): Promise<Note> {
+    const result = await this.db.insert(notes).values({
+      ...data,
+      date: data.date || new Date(),
+      tags: data.tags || null
+    });
+    const id = Number(result[0].insertId);
+    return { 
+      id,
+      ...data,
+      date: data.date || new Date(),
+      tags: data.tags || null
+    };
   }
 
-  async createActivity(insertActivity: InsertActivity): Promise<Activity> {
-    const id = this.activityIdCounter++;
-    const activity: Activity = { ...insertActivity, id, date: new Date() };
-    this.activities.set(id, activity);
-    return activity;
+  async updateNote(id: number, data: Partial<Note>): Promise<Note> {
+    await this.db.update(notes)
+      .set({
+        ...data,
+        date: data.date || new Date()
+      })
+      .where(eq(notes.id, id));
+    
+    const [updatedNote] = await this.db.select()
+      .from(notes)
+      .where(eq(notes.id, id));
+    
+    if (!updatedNote) {
+      throw new Error("Failed to update note");
+    }
+    
+    return updatedNote;
+  }
+
+  async deleteNote(id: number): Promise<void> {
+    await this.db.delete(notes).where(eq(notes.id, id));
+  }
+
+  // Event operations
+  async getEventsByUserId(userId: number): Promise<Event[]> {
+    return await this.db.select().from(events).where(eq(events.userId, userId));
+  }
+
+  async getEventById(id: number): Promise<Event | undefined> {
+    const [event] = await this.db.select().from(events).where(eq(events.id, id));
+    return event;
+  }
+
+  async createEvent(data: InsertEvent): Promise<Event> {
+    const result = await this.db.insert(events).values({
+      ...data,
+      date: data.date || new Date().toISOString().split('T')[0],
+      type: data.type || 'event',
+      color: data.color || 'blue'
+    });
+    const id = Number(result[0].insertId);
+    return { 
+      id,
+      ...data,
+      date: data.date || new Date().toISOString().split('T')[0],
+      type: data.type || 'event',
+      color: data.color || 'blue'
+    };
+  }
+
+  async updateEvent(id: number, data: Partial<Event>): Promise<Event> {
+    await this.db.update(events)
+      .set({
+        ...data,
+        date: data.date || new Date().toISOString().split('T')[0]
+      })
+      .where(eq(events.id, id));
+    
+    const [updatedEvent] = await this.db.select()
+      .from(events)
+      .where(eq(events.id, id));
+    
+    if (!updatedEvent) {
+      throw new Error("Failed to update event");
+    }
+    
+    return updatedEvent;
+  }
+
+  async deleteEvent(id: number): Promise<void> {
+    await this.db.delete(events).where(eq(events.id, id));
+  }
+
+  // Activity operations
+  async getRecentActivities(userId: number): Promise<Activity[]> {
+    try {
+      console.log('Fetching recent activities for user:', userId);
+      const result = await this.db.select()
+        .from(activities)
+        .where(eq(activities.userId, userId))
+        .orderBy(sql`${activities.date} DESC`)
+        .limit(10);
+      console.log('Found activities:', result);
+      return result;
+    } catch (error) {
+      console.error('Error fetching recent activities:', error);
+      console.error('Error details:', error instanceof Error ? error.message : error);
+      return [];
+    }
+  }
+
+  async createActivity(data: InsertActivity): Promise<Activity> {
+    try {
+      console.log('Creating activity:', data);
+      const result = await this.db.insert(activities).values({
+        ...data,
+        date: data.date || new Date()
+      });
+      const id = Number(result[0].insertId);
+      const activity = { 
+        id,
+        ...data,
+        date: data.date || new Date()
+      };
+      console.log('Created activity:', activity);
+      return activity;
+    } catch (error) {
+      console.error('Error creating activity:', error);
+      throw error;
+    }
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DbStorage();

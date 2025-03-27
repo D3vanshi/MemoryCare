@@ -370,7 +370,8 @@ export default function GalleryPage() {
                   </Button>
                   <Button 
                     type="submit"
-                    disabled={addPhotoMutation.isPending || !form.getValues().imageUrl}
+                    disabled={addPhotoMutation.isPending}
+                    className="bg-primary hover:bg-primary/90"
                   >
                     {addPhotoMutation.isPending ? "Adding..." : "Add Photo"}
                   </Button>
